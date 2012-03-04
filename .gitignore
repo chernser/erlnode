@@ -2,6 +2,7 @@
 .idea
 .lock-wscript
 .cproject
+.project
 *.log
 *.iml
 Debug
