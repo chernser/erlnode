@@ -1,0 +1,9 @@
+.settings
+.idea
+.lock-wscript
+.cproject
+*.log
+*.iml
+Debug
+build
+
