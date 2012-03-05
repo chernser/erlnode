@@ -15,22 +15,29 @@ class ErlNode : public node::ObjectWrap {
 
 
 public:
-	  static void Init();
-	  static v8::Handle<v8::Value> NewInstance(const v8::Arguments& args);
+    static void Init();
+    static v8::Handle<v8::Value> NewInstance(const v8::Arguments& args);
 
 private:
+     //ErlNode(v8::Local<v8::String> name, v8::Local<v8::String> secretCookie, v8::Local<v8::Number> instanceId);
+     ErlNode(v8::String* name, v8::Local<v8::String> secretCookie, v8::Local<v8::Number> instanceId);
+     ~ErlNode();
 
+    static v8::Persistent<v8::Function> constructor;
+    static v8::Handle<v8::Value> New(const v8::Arguments& args);
 
-	  static v8::Persistent<v8::Function> constructor;
-	  static v8::Handle<v8::Value> New(const v8::Arguments& args);
-
-	  // ErlNode API (see also: http://www.erlang.org/doc/tutorial/cnode.html)
-	  static v8::Handle<v8::Value> getName(const v8::Arguments& args);
+    // ErlNode API (see also: http://www.erlang.org/doc/tutorial/cnode.html)
+    static v8::Handle<v8::Value> getName(const v8::Arguments& args);
+    static v8::Handle<v8::Value> getInstanceId(const v8::Arguments& args);   
 
 
 
 private:
-	 v8::Local<v8::String> name;
+//    v8::Local<v8::String> name;
+    v8::String* name;
+    v8::Local<v8::Number> instanceId;
+
+
 };
 
 #endif
