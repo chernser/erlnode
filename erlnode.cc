@@ -97,6 +97,10 @@ void ErlNode::Init() {
     // getInstanceId()
     Local<FunctionTemplate> getInstanceIdFunc = FunctionTemplate::New(getInstanceId);
     tmpl->PrototypeTemplate()->Set(String::NewSymbol("getInstanceId"), getInstanceIdFunc->GetFunction());
+    
+    // send()
+    Local<FunctionTemplate> sendFunc = FunctionTemplate::New(send);
+    tmpl->PrototypeTemplate()->Set(String::NewSymbol("send"), sendFunc->GetFunction());
 
 	constructor = Persistent<Function>::New(tmpl->GetFunction());
 
@@ -127,6 +131,46 @@ v8::Handle<v8::Value> ErlNode::getInstanceId(const v8::Arguments& args) {
     
     ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
     return scope.Close(Integer::New(that->instanceId));
+}
+
+int32_t ErlNode::send(const _eterm* data, const char* nodeId) { 
+
+    return 0;
+}
+    
+_eterm* ErlNode::jsObjectToETerm(const v8::Local<v8::Object> data) { 
+
+    return NULL;
+}
+
+
+v8::Handle<v8::Value> ErlNode::send(const v8::Arguments& args) { 
+    HandleScope scope;
+    
+    int32_t resultCode = 0; // OK
+    if (!args[0]->IsObject()) { 
+        resultCode = -100;
+    } else if (!args[1]->IsString()) { 
+        resultCode = -200;   
+    } else { 
+        Local<String> destNodeStr = Local<String>::Cast(args[1]);
+        if (destNodeStr->Length() < 1) { 
+            resultCode = -210;
+        } else { 
+            char* destinationNodeId = new char[destNodeStr->Length() + 1];
+            try { 
+                destNodeStr->WriteAscii(destinationNodeId);
+                ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
+                ETERM* data = ErlNode::jsObjectToETerm(Local<Object>::Cast(args[0]));
+                resultCode = that->send(data, destinationNodeId);
+            } catch (...) { 
+                resultCode = -1000;
+            }
+            delete destinationNodeId;
+        }
+    }
+
+    return scope.Close(Integer::New(resultCode));
 }
 
 
