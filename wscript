@@ -11,8 +11,7 @@ def set_options(opt):
 def configure(conf):
   conf.check_tool('compiler_cxx')
   conf.check_tool('node_addon')
-  conf.env.append_unique('CXXFLAGS', ['-Wall', '-O3'])
-  conf.env.append_unique('CXXFLAGS', ['-Wall', '-O3'])
+  conf.env.append_unique('CXXFLAGS', ['-Wall', '-O3', '-g'])
 
 def build(bld):
   obj = bld.new_task_gen('cxx', 'shlib', 'node_addon')

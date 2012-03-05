@@ -23,16 +23,11 @@ using namespace v8;
  * createNode - creates erlang node
  */
 Handle<Value> createNode(const Arguments& args) {
-  HandleScope scope;
-
-  return scope.Close(ErlNode::NewInstance(args));
+//  HandleScope scope;
+  //return scope.Close(ErlNode::NewInstance(args));
+  return ErlNode::NewInstance(args);
 }
 
-
-Handle<Value> Method(const Arguments& args) {
-	HandleScope scope;
-	return scope.Close(String::New("world"));
-}
 
 void init(Handle<Object> target) {
 	ErlNode::Init();

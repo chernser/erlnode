@@ -13,6 +13,7 @@ using namespace node;
 
 class ErlNode : public node::ObjectWrap {
 
+    
 
 public:
     static void Init();
@@ -20,7 +21,7 @@ public:
 
 private:
      //ErlNode(v8::Local<v8::String> name, v8::Local<v8::String> secretCookie, v8::Local<v8::Number> instanceId);
-     ErlNode(v8::String* name, v8::Local<v8::String> secretCookie, v8::Local<v8::Number> instanceId);
+     ErlNode(const char* name, const char* secretCookie, int32_t instanceId);
      ~ErlNode();
 
     static v8::Persistent<v8::Function> constructor;
@@ -33,9 +34,12 @@ private:
 
 
 private:
-//    v8::Local<v8::String> name;
-    v8::String* name;
-    v8::Local<v8::Number> instanceId;
+    const static char* DEFAULT_NODE_NAME;
+    const static char* DEFAULT_SECRET;
+
+    int32_t instanceId;
+    const char* name;
+    
 
 
 };

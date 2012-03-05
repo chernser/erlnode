@@ -23,48 +23,56 @@ using namespace v8;
 
 v8::Persistent<v8::Function> ErlNode::constructor;
 
+const char* ErlNode::DEFAULT_NODE_NAME = "cnode";
 
-//ErlNode::ErlNode(v8::Local<v8::String> name, v8::Local<v8::String> secretCookie, v8::Local<v8::Number> instanceId) {
-ErlNode::ErlNode(v8::String* name, v8::Local<v8::String> secretCookie, v8::Local<v8::Number> instanceId) {  
+const char* ErlNode::DEFAULT_SECRET = "secret";
 
+
+ErlNode::ErlNode(const char* name, const char* secretCookie, int32_t instanceId) {  
 
     this->name = name;
     this->instanceId = instanceId;
 
-//	erl_connect_init(1, )
+	erl_connect_init(1, (char*)this->name, this->instanceId);
 }
 
 ErlNode::~ErlNode() { 
-
+    delete this->name;
 }
 
 
-v8::Handle<v8::Value> ErlNode::New(const v8::Arguments& args) {
-	
-//	v8::Local<v8::String> name;
-	v8::String* name;
-    v8::Local<v8::String> secretCookie;
-    v8::Local<v8::Number> instanceId;
+v8::Handle<v8::Value> ErlNode::New(const v8::Arguments& args) {	
+    char* name = (char*)ErlNode::DEFAULT_NODE_NAME;
+    char* secretCookie = (char*)ErlNode::DEFAULT_SECRET;
+    int32_t instanceId = 0;
 
-	if (!args[0]->IsUndefined() && args[0]->IsString()) {
-        name = *(args[0]->ToString());
-	}  else { 
-        name = *String::New("cnode");
-    }
 
-    if (!args[1]->IsUndefined() && args[1]->IsString()) { 
-        secretCookie = Local<String>::New(args[1]->ToString());
+    if (args[0]->IsObject()) { 
+        Local<Object> obj = Local<Object>::Cast(args[0]);    
+        Local<Value> value;
+        
+        value = obj->Get(String::New("instanceId"));
+        if (!value->IsUndefined() && value->IsNumber()) 
+            instanceId = Local<Number>::Cast(value)->Value();
+            
+        value = obj->Get(String::New("name"));
+        if (!value->IsUndefined() && value->IsString()) { 
+            Local<String> string = Local<String>::Cast(value);
+            name = new char[string->Length() + 1];
+            string->WriteAscii(name);            
+        }
+        
+        value = obj->Get(String::New("secretCookie"));
+        if (!value->IsUndefined() && value->IsString()) { 
+            Local<String> string = Local<String>::Cast(value);
+            secretCookie = new char[string->Length() + 1];
+            string->WriteAscii(secretCookie);
+        }
     } else { 
-        secretCookie = String::New("secret");
+        // TODO: throw exception or do something   
     }
 
-    if (!args[2]->IsUndefined() && args[2]->IsNumber()) { 
-        instanceId = Local<Number>::New(args[2]->ToNumber());
-    } else { 
-        instanceId = Number::New(0);
-    }
-
-	ErlNode* erlNode = new ErlNode(name, secretCookie, instanceId);
+	ErlNode* erlNode = new ErlNode((const char*)name, (const char*)secretCookie, instanceId);
 
 
 	erlNode->Wrap(args.This());
@@ -77,7 +85,7 @@ void ErlNode::Init() {
 	Local<FunctionTemplate> tmpl = FunctionTemplate::New(New);
 
 	tmpl->SetClassName(String::NewSymbol(CLASS_NAME));
-	tmpl->InstanceTemplate()->SetInternalFieldCount(2);
+	tmpl->InstanceTemplate()->SetInternalFieldCount(1);
 
 
 	// .protorype //
@@ -93,7 +101,7 @@ void ErlNode::Init() {
 	constructor = Persistent<Function>::New(tmpl->GetFunction());
 
 	// erl_interface memory init function 
-	erl_init(NULL, 0);
+    erl_init(NULL, 0);
 }
 
 
@@ -111,14 +119,14 @@ v8::Handle<v8::Value> ErlNode::getName(const v8::Arguments& args){
 	HandleScope scope;
 
 	ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
-	return scope.Close(Local<String>(that->name));
+	return scope.Close(String::New(that->name));
 }
 
 v8::Handle<v8::Value> ErlNode::getInstanceId(const v8::Arguments& args) { 
     HandleScope scope;
     
     ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
-    return scope.Close(Local<Number>::New(that->instanceId));
+    return scope.Close(Integer::New(that->instanceId));
 }
 
 
