@@ -10,6 +10,8 @@ This is erlang interface wrapper for node.js
 
 ==== How to run =========
 
+Firstly change `destNode` to e1@<your host name> in test.js
+
 Order is important:
 1. erl -sname e1 -setcookie secret
 2. node ./test.js
