@@ -3,6 +3,7 @@
 .lock-wscript
 .cproject
 .project
+*.beam
 *.log
 *.iml
 Debug

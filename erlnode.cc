@@ -7,6 +7,8 @@
  * Author: Sergey Chernov <chernser@gmail.com>
  */
 #define BUILDING_NODE_EXTENSION
+#include <iostream>
+#include <sstream>
 #include <cstdio>
 
 /* Nodejs includes */
@@ -23,7 +25,7 @@ using namespace v8;
 
 v8::Persistent<v8::Function> ErlNode::constructor;
 
-const char* ErlNode::DEFAULT_NODE_NAME = "cnode";
+const char* ErlNode::DEFAULT_NODE_NAME = "cnode@localhost";
 
 const char* ErlNode::DEFAULT_SECRET = "secret";
 
@@ -32,8 +34,8 @@ ErlNode::ErlNode(const char* name, const char* secretCookie, int32_t instanceId)
 
     this->name = name;
     this->instanceId = instanceId;
-
-	erl_connect_init(1, (char*)this->name, this->instanceId);
+    std::cout << "this node name: " << this->name << ", instanceId: " << this->instanceId << "\n";
+	erl_connect_init(1, (char*)secretCookie, this->instanceId);
 }
 
 ErlNode::~ErlNode() { 
@@ -135,12 +137,90 @@ v8::Handle<v8::Value> ErlNode::getInstanceId(const v8::Arguments& args) {
 
 int32_t ErlNode::send(const _eterm* data, const char* nodeId) { 
 
+    std::cout << "nodeId: " << nodeId << "\n";
+    int fd = erl_connect((char*)nodeId);
+    
+    if (fd <= 0) 
+        return -300;
+
+    ETERM* fromp = erl_mk_pid((const char*)nodeId, 0, 38, 0);
+
+    if (erl_reg_send(fd, (char*)nodeId, (ETERM*)data) != 1) 
+        return -310;
+    
     return 0;
 }
     
 _eterm* ErlNode::jsObjectToETerm(const v8::Local<v8::Object> data) { 
 
-    return NULL;
+    Local<Object> currentObject = data;
+    ETERM* curObjectTuple;
+    ETERM** curObjectZeroLevelTerms; 
+    ETERM** propertyTupleBuff = new ETERM*[2];
+
+    bool isDone = false;
+    while (!isDone) { 
+            Local<Array> objectPropertyNames = currentObject->GetOwnPropertyNames();
+            uint32_t numberOfProperties = objectPropertyNames->Length();
+
+            curObjectZeroLevelTerms = new ETERM*[numberOfProperties];
+            uint32_t curZeroLevelTermIndex = 0;
+            for (uint32_t propertyIndex = 0; propertyIndex < numberOfProperties; ++propertyIndex) { 
+                Local<String> propertyKey = Local<String>::Cast(objectPropertyNames->Get(propertyIndex));
+                Local<Value> property = currentObject->Get(objectPropertyNames->Get(propertyIndex));
+                char* propertyName = new char[propertyKey->Length() + 1];
+                propertyKey->WriteAscii(propertyName);
+                
+
+                if (!property->IsObject()) { 
+                    if (property->IsString()) { 
+                        Local<String> stringValue = Local<String>::Cast(property);
+                        char* string = new char[stringValue->Length() + 1];
+                        stringValue->WriteAscii(string);
+                        
+                                
+                        propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
+                        propertyTupleBuff[1] = erl_mk_binary(string, stringValue->Length());
+                        
+                        curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);
+                        delete string;
+                    } else if (property->IsInt32()) { 
+                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
+                            propertyTupleBuff[1] = erl_mk_int(property->Int32Value());
+                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
+                    } else if (property->IsUint32()) {         
+                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
+                            propertyTupleBuff[1] = erl_mk_int(property->Uint32Value());
+                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
+                    } else if (property->IsNumber() && (!property->IsInt32() || !property->IsUint32())) { 
+                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
+                            propertyTupleBuff[1] = erl_mk_float(property->NumberValue());
+                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
+                    } else if (property->IsBoolean()) { 
+                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
+                            propertyTupleBuff[1] = erl_mk_atom(property->IsTrue() ? "true" : "false");
+                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
+                    }
+                } else { 
+                    // handle inner object
+
+                }
+                
+                delete propertyName;
+            }
+
+            /* DEBUG */
+            curObjectTuple = erl_mk_list(curObjectZeroLevelTerms, curZeroLevelTermIndex);
+            erl_print_term(stderr, curObjectTuple);
+            fprintf(stderr,"~\n");
+            fflush(stdout);
+
+            isDone = true;
+    } 
+
+    v8::Local<v8::Array> objectProperties = data->GetOwnPropertyNames();
+
+    return curObjectTuple;
 }
 
 
@@ -162,7 +242,8 @@ v8::Handle<v8::Value> ErlNode::send(const v8::Arguments& args) {
                 destNodeStr->WriteAscii(destinationNodeId);
                 ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
                 ETERM* data = ErlNode::jsObjectToETerm(Local<Object>::Cast(args[0]));
-                resultCode = that->send(data, destinationNodeId);
+                resultCode = that->send((const _eterm*)data, destinationNodeId);
+                erl_free_compound(data);
             } catch (...) { 
                 resultCode = -1000;
             }

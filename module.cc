@@ -7,7 +7,7 @@
  * Author: Sergey Chernov <chernser@gmail.com>
  */
 #define BUILDING_NODE_EXTENSION
-#include <cstdio>
+#include <iostream>
 
 /* Nodejs includes */
 #include <v8.h>
