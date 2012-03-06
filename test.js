@@ -31,9 +31,22 @@ var message = {
     isPersitent: true
 };
 
-var destNode = "erl_node@localhost";
+var destNode = "e1@Zeus";
+var endpoint = "elogger";
 
-console.log("debug: " + erlNode.send(message, destNode));
+var result = 0;
+var start = new Date();
+for (var i = 0; i < 10000000; ++i) {
+    message.counter = i;
+    result = erlNode.send(destNode, endpoint, message);
+    if (result == 0) 
+        console.log(".");
+    else 
+        console.log(result);
+}
+
+console.log(start);
+console.log(new Date());
 
 
 var erlNodeDefault = ErlNodeModule.createNode();

@@ -135,19 +135,28 @@ v8::Handle<v8::Value> ErlNode::getInstanceId(const v8::Arguments& args) {
     return scope.Close(Integer::New(that->instanceId));
 }
 
-int32_t ErlNode::send(const _eterm* data, const char* nodeId) { 
+int32_t ErlNode::send(const char* nodeId, const char* endpoint, const _eterm* data) { 
 
-    std::cout << "nodeId: " << nodeId << "\n";
-    int fd = erl_connect((char*)nodeId);
+    std::cout << "nodeId: " << "aaa" << "\n";
+    static int fd = 0;
     
-    if (fd <= 0) 
-        return -300;
+    if (fd == 0) {
+        fd = erl_connect((char*)nodeId);
+    
+        if (fd <= 0) {
+            std::cout << "Failed to connect\n";
+            return -300;
+        }
+    }
 
     ETERM* fromp = erl_mk_pid((const char*)nodeId, 0, 38, 0);
-
-    if (erl_reg_send(fd, (char*)nodeId, (ETERM*)data) != 1) 
-        return -310;
     
+    if (erl_reg_send(fd, (char*)endpoint, (ETERM*)data) != 1) { 
+        erl_close_connection(fd);
+        return -310;
+    }
+    
+//    erl_close_connection(fd);
     return 0;
 }
     
@@ -211,10 +220,10 @@ _eterm* ErlNode::jsObjectToETerm(const v8::Local<v8::Object> data) {
 
             /* DEBUG */
             curObjectTuple = erl_mk_list(curObjectZeroLevelTerms, curZeroLevelTermIndex);
-            erl_print_term(stderr, curObjectTuple);
+           /* erl_print_term(stderr, curObjectTuple);
             fprintf(stderr,"~\n");
             fflush(stdout);
-
+            */
             isDone = true;
     } 
 
@@ -227,26 +236,41 @@ _eterm* ErlNode::jsObjectToETerm(const v8::Local<v8::Object> data) {
 v8::Handle<v8::Value> ErlNode::send(const v8::Arguments& args) { 
     HandleScope scope;
     
-    int32_t resultCode = 0; // OK
-    if (!args[0]->IsObject()) { 
-        resultCode = -100;
-    } else if (!args[1]->IsString()) { 
-        resultCode = -200;   
+    int32_t resultCode = 0; // OK    
+    if (!args[0]->IsString()) { // nodeId
+        resultCode = -110;   
+    } else if (!args[1]->IsString()) { // endpoint
+        resultCode = -120;   
+    } else if (!args[2]->IsObject()) { // message
+        resultCode = -130;
     } else { 
-        Local<String> destNodeStr = Local<String>::Cast(args[1]);
+        Local<String> destNodeStr = Local<String>::Cast(args[0]);
+        Local<String> endpointStr = Local<String>::Cast(args[1]);
         if (destNodeStr->Length() < 1) { 
             resultCode = -210;
+        } else if (endpointStr->Length() < 1) { 
+            resultCode = -220;
         } else { 
             char* destinationNodeId = new char[destNodeStr->Length() + 1];
+            char* endpoint = new char[endpointStr->Length() + 1];
+            ETERM* data = NULL;
+
             try { 
                 destNodeStr->WriteAscii(destinationNodeId);
+                endpointStr->WriteAscii(endpoint);
+
                 ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
-                ETERM* data = ErlNode::jsObjectToETerm(Local<Object>::Cast(args[0]));
-                resultCode = that->send((const _eterm*)data, destinationNodeId);
-                erl_free_compound(data);
-            } catch (...) { 
+                data = ErlNode::jsObjectToETerm(Local<Object>::Cast(args[2]));
+
+                resultCode = that->send(destinationNodeId, endpoint, (const _eterm*)data);
+            } catch (...) {                 
                 resultCode = -1000;
             }
+            
+            if (data != NULL) {
+                erl_free_compound(data);
+            }
+            delete endpoint;
             delete destinationNodeId;
         }
     }

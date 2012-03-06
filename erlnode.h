@@ -33,7 +33,7 @@ private:
     static v8::Handle<v8::Value> getInstanceId(const v8::Arguments& args);   
 
     static v8::Handle<v8::Value> send(const v8::Arguments& args);
-    int32_t send(const _eterm* data, const char* nodeId);
+    int32_t send(const char* nodeId, const char* endpoint, const _eterm* data);
     
     static _eterm* jsObjectToETerm(const v8::Local<v8::Object> data);
 

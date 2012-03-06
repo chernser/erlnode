@@ -3,12 +3,22 @@
 -import(io).
 -export([start/0]).
 
-start() ->
-    io:fwrite("Start listening for messages"),
-    io:fwrite("self: ~p~n", [self()]),
+
+listen() -> 
     receive
         Msg -> 
             io:fwrite("Msg: ~p~n", [Msg])
-    end.
+    end,
+    listen().
+
+
+
+start() ->
+    io:fwrite("Start listening for messages"),
+    register(elogger, self()),
+    listen().
+    
+  
+    
             
 
