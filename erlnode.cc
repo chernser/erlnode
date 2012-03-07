@@ -1,8 +1,5 @@
 /**
- * enode.cc - module for node.js
- *
- * Purpose:
- * 		Creating erlang nodes to allow node.js script 'talk' to erlang application
+ * erlnode.cc - ErlNode implementation
  *
  * Author: Sergey Chernov <chernser@gmail.com>
  */
@@ -11,19 +8,21 @@
 #include <sstream>
 #include <cstdio>
 
-/* Nodejs includes */
+/* Nodejs and V8 includes */
 #include <v8.h>
 #include <node.h>
 #include <node_version.h>
 
+/* Erlang includes */
 #include <erl_interface.h>
 #include <ei.h>
 
 #include "erlnode.h"
 
 using namespace v8;
+using namespace node;
 
-v8::Persistent<v8::Function> ErlNode::constructor;
+Persistent<Function> ErlNode::constructor;
 
 const char* ErlNode::DEFAULT_NODE_NAME = "cnode@localhost";
 
@@ -43,7 +42,7 @@ ErlNode::~ErlNode() {
 }
 
 
-v8::Handle<v8::Value> ErlNode::New(const v8::Arguments& args) {	
+Handle<Value> ErlNode::New(const Arguments& args) {	
     char* name = (char*)ErlNode::DEFAULT_NODE_NAME;
     char* secretCookie = (char*)ErlNode::DEFAULT_SECRET;
     int32_t instanceId = 0;
@@ -100,18 +99,21 @@ void ErlNode::Init() {
     Local<FunctionTemplate> getInstanceIdFunc = FunctionTemplate::New(getInstanceId);
     tmpl->PrototypeTemplate()->Set(String::NewSymbol("getInstanceId"), getInstanceIdFunc->GetFunction());
     
-    // send()
-    Local<FunctionTemplate> sendFunc = FunctionTemplate::New(send);
-    tmpl->PrototypeTemplate()->Set(String::NewSymbol("send"), sendFunc->GetFunction());
+    // connect()
+    Local<FunctionTemplate> connectFunc = FunctionTemplate::New(connect);
+    tmpl->PrototypeTemplate()->Set(String::NewSymbol("connect"), connectFunc->GetFunction());
 
 	constructor = Persistent<Function>::New(tmpl->GetFunction());
 
+
+    ErlNode::ErlNodeConnection::Init();
+    
 	// erl_interface memory init function 
     erl_init(NULL, 0);
 }
 
 
-v8::Handle<Value> ErlNode::NewInstance(const v8::Arguments& args) {
+Handle<Value> ErlNode::NewInstance(const Arguments& args) {
 	HandleScope scope;
 
 	const unsigned argc = 1;
@@ -121,163 +123,51 @@ v8::Handle<Value> ErlNode::NewInstance(const v8::Arguments& args) {
 	return scope.Close(instance);
 }
 
-v8::Handle<v8::Value> ErlNode::getName(const v8::Arguments& args){
+Handle<Value> ErlNode::getName(const Arguments& args){
 	HandleScope scope;
 
 	ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
 	return scope.Close(String::New(that->name));
 }
 
-v8::Handle<v8::Value> ErlNode::getInstanceId(const v8::Arguments& args) { 
+Handle<Value> ErlNode::getInstanceId(const Arguments& args) { 
     HandleScope scope;
     
     ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
     return scope.Close(Integer::New(that->instanceId));
 }
-
-int32_t ErlNode::send(const char* nodeId, const char* endpoint, const _eterm* data) { 
-
-    std::cout << "nodeId: " << "aaa" << "\n";
-    static int fd = 0;
-    
-    if (fd == 0) {
-        fd = erl_connect((char*)nodeId);
-    
-        if (fd <= 0) {
-            std::cout << "Failed to connect\n";
-            return -300;
-        }
-    }
-
-    ETERM* fromp = erl_mk_pid((const char*)nodeId, 0, 38, 0);
-    
-    if (erl_reg_send(fd, (char*)endpoint, (ETERM*)data) != 1) { 
-        erl_close_connection(fd);
-        return -310;
-    }
-    
-//    erl_close_connection(fd);
-    return 0;
-}
-    
-_eterm* ErlNode::jsObjectToETerm(const v8::Local<v8::Object> data) { 
-
-    Local<Object> currentObject = data;
-    ETERM* curObjectTuple;
-    ETERM** curObjectZeroLevelTerms; 
-    ETERM** propertyTupleBuff = new ETERM*[2];
-
-    bool isDone = false;
-    while (!isDone) { 
-            Local<Array> objectPropertyNames = currentObject->GetOwnPropertyNames();
-            uint32_t numberOfProperties = objectPropertyNames->Length();
-
-            curObjectZeroLevelTerms = new ETERM*[numberOfProperties];
-            uint32_t curZeroLevelTermIndex = 0;
-            for (uint32_t propertyIndex = 0; propertyIndex < numberOfProperties; ++propertyIndex) { 
-                Local<String> propertyKey = Local<String>::Cast(objectPropertyNames->Get(propertyIndex));
-                Local<Value> property = currentObject->Get(objectPropertyNames->Get(propertyIndex));
-                char* propertyName = new char[propertyKey->Length() + 1];
-                propertyKey->WriteAscii(propertyName);
-                
-
-                if (!property->IsObject()) { 
-                    if (property->IsString()) { 
-                        Local<String> stringValue = Local<String>::Cast(property);
-                        char* string = new char[stringValue->Length() + 1];
-                        stringValue->WriteAscii(string);
-                        
-                                
-                        propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
-                        propertyTupleBuff[1] = erl_mk_binary(string, stringValue->Length());
-                        
-                        curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);
-                        delete string;
-                    } else if (property->IsInt32()) { 
-                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
-                            propertyTupleBuff[1] = erl_mk_int(property->Int32Value());
-                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
-                    } else if (property->IsUint32()) {         
-                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
-                            propertyTupleBuff[1] = erl_mk_int(property->Uint32Value());
-                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
-                    } else if (property->IsNumber() && (!property->IsInt32() || !property->IsUint32())) { 
-                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
-                            propertyTupleBuff[1] = erl_mk_float(property->NumberValue());
-                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
-                    } else if (property->IsBoolean()) { 
-                            propertyTupleBuff[0] = erl_mk_binary(propertyName, propertyKey->Length());                        
-                            propertyTupleBuff[1] = erl_mk_atom(property->IsTrue() ? "true" : "false");
-                            curObjectZeroLevelTerms[curZeroLevelTermIndex++] = erl_mk_tuple(propertyTupleBuff, 2);  
-                    }
-                } else { 
-                    // handle inner object
-
-                }
-                
-                delete propertyName;
-            }
-
-            /* DEBUG */
-            curObjectTuple = erl_mk_list(curObjectZeroLevelTerms, curZeroLevelTermIndex);
-           /* erl_print_term(stderr, curObjectTuple);
-            fprintf(stderr,"~\n");
-            fflush(stdout);
-            */
-            isDone = true;
-    } 
-
-    v8::Local<v8::Array> objectProperties = data->GetOwnPropertyNames();
-
-    return curObjectTuple;
-}
-
-
-v8::Handle<v8::Value> ErlNode::send(const v8::Arguments& args) { 
+      
+Handle<Value> ErlNode::connect(const Arguments& args) { 
     HandleScope scope;
     
-    int32_t resultCode = 0; // OK    
-    if (!args[0]->IsString()) { // nodeId
-        resultCode = -110;   
-    } else if (!args[1]->IsString()) { // endpoint
-        resultCode = -120;   
-    } else if (!args[2]->IsObject()) { // message
-        resultCode = -130;
-    } else { 
-        Local<String> destNodeStr = Local<String>::Cast(args[0]);
-        Local<String> endpointStr = Local<String>::Cast(args[1]);
-        if (destNodeStr->Length() < 1) { 
-            resultCode = -210;
-        } else if (endpointStr->Length() < 1) { 
-            resultCode = -220;
-        } else { 
-            char* destinationNodeId = new char[destNodeStr->Length() + 1];
-            char* endpoint = new char[endpointStr->Length() + 1];
-            ETERM* data = NULL;
-
-            try { 
-                destNodeStr->WriteAscii(destinationNodeId);
-                endpointStr->WriteAscii(endpoint);
-
-                ErlNode* that = ObjectWrap::Unwrap<ErlNode>(args.This());
-                data = ErlNode::jsObjectToETerm(Local<Object>::Cast(args[2]));
-
-                resultCode = that->send(destinationNodeId, endpoint, (const _eterm*)data);
-            } catch (...) {                 
-                resultCode = -1000;
-            }
-            
-            if (data != NULL) {
-                erl_free_compound(data);
-            }
-            delete endpoint;
-            delete destinationNodeId;
-        }
+    if (!args[0]->IsString()) { 
+        throw "Invalid nodeId value";
+    } else if (!args[1]->IsString()) { 
+        throw "Invalid endpoint value";
     }
+    
+    Local<String> nodeIdArg = Local<String>::Cast(args[0]);
+    Local<String> endpointArg = Local<String>::Cast(args[1]);    
 
-    return scope.Close(Integer::New(resultCode));
+    char* nodeId = new char[nodeIdArg->Length() + 1];
+    char* endpoint = new char[endpointArg->Length() + 1];
+    
+    nodeIdArg->WriteAscii(nodeId);
+    endpointArg->WriteAscii(endpoint);
+
+
+    ErlNode* erlNode = ObjectWrap::Unwrap<ErlNode>(args.This());
+    ErlNodeConnection* connection = erlNode->connect(nodeId, endpoint);
+    Local<Object> connectionObj = ErlNodeConnection::objTemplate->NewInstance();
+    connection->Wrap(connectionObj);    
+    
+    return scope.Close(connectionObj);
 }
-
+    
+ErlNode::ErlNodeConnection* ErlNode::connect(const char* nodeId, const char* endpoint) {
+    // TODO: implement saving all child connections to linked list 
+    return new ErlNodeConnection(nodeId, endpoint, *this);
+}
 
 
 

@@ -1,6 +1,6 @@
 srcdir = '.'
 blddir = 'build'
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 erl_interface_dir = "/usr/local/lib/erlang/lib/erl_interface-3.7.6/"
 erl_interface_libs = ["-lerl_interface", "-lei", "-lnsl"]
@@ -19,5 +19,5 @@ def build(bld):
   bld.env.append_value('LINKFLAGS', erl_interface_libs) 
   obj.cxxflags = ["-I../deps", "-I" + erl_interface_dir + "include", "-g", "-Wall"]
   obj.target = "erlnode"
-  obj.source = ["erlnode.cc", "module.cc"]
+  obj.source = ["v8object_converter.cc", "erlnode_connection.cc", "erlnode.cc", "module.cc"]
   

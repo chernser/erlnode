@@ -1,5 +1,5 @@
 /**
- * enode.cc - module for node.js
+ * module.cc - module for node.js
  *
  * Purpose:
  * 		Creating erlang nodes to allow node.js script 'talk' to erlang application
